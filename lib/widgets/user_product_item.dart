@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_complete_guide/providers/products.dart';
 import 'package:provider/provider.dart';
-//import 'package:shop_app_flutter/providers/products.dart';
+
+import '../providers/products.dart';
 import '../screens/edit_product_screen.dart';
 
 class UserProductItem extends StatelessWidget {
@@ -48,10 +48,20 @@ class UserProductItem extends StatelessWidget {
                     child: const Text('No'),
                   ),
                   ElevatedButton(
-                    onPressed: () {
-                      Provider.of<Products>(context, listen: false)
-                          .deleteProduct(id);
-                      Navigator.of(ctx).pop(true);
+                    onPressed: () async {
+                      try {
+                        await Provider.of<Products>(context, listen: false)
+                            .deleteProduct(id);
+                      } catch (error) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Deleting failed!',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
                     },
                     child: const Text('Yes'),
                   ),

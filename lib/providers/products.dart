@@ -1,10 +1,14 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../models/http_exceptions.dart';
 import './product.dart';
 
 class Products with ChangeNotifier {
-  final List<Product> _items = [
-    Product(
+  List<Product> _items = [
+    /* Product(
       id: 'p1',
       title: 'Red Shirt',
       description: 'A red shirt - it is pretty red!',
@@ -35,10 +39,9 @@ class Products with ChangeNotifier {
       price: 49.99,
       imageUrl:
           'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Cast-Iron-Pan.jpg/1024px-Cast-Iron-Pan.jpg',
-    ),
+    ), */
   ];
-
-  //var _showFavoritesOnly = false;
+  // var _showFavoritesOnly = false;
 
   List<Product> get items {
     // if (_showFavoritesOnly) {
@@ -52,7 +55,7 @@ class Products with ChangeNotifier {
   }
 
   Product findById(String id) {
-    return items.firstWhere((prod) => prod.id == id);
+    return _items.firstWhere((prod) => prod.id == id);
   }
 
   // void showFavoritesOnly() {
@@ -64,33 +67,104 @@ class Products with ChangeNotifier {
   //   _showFavoritesOnly = false;
   //   notifyListeners();
   // }
+  Future<void> fetchAndSetProducts() async {
+    final url = Uri.parse(
+        'https://baza-c087c-default-rtdb.firebaseio.com/products.json');
+    try {
+      final response = await http.get(url);
+      //print(json.decode(response.body));
+      final extractedData = json.decode(response.body) as Map<String, dynamic>;
+      final List<Product> loadedProducts = [];
+      //if (extractedData == null) {
+      //return;
+      //}
 
-  void addProduct(Product product) {
-    final newProduct = Product(
-      id: DateTime.now().toString(),
-      title: product.title,
-      description: product.description,
-      price: product.price,
-      imageUrl: product.imageUrl,
-    );
-
-    _items.add(newProduct);
-    notifyListeners();
+      extractedData.forEach((prodId, prodData) {
+        loadedProducts.add(
+          Product(
+            id: prodId,
+            title: prodData['title'],
+            description: prodData['description'],
+            price: prodData['price'],
+            isFavorite: prodData['isFavorite'],
+            imageUrl: prodData['imageUrl'],
+          ),
+        );
+      });
+      _items = loadedProducts;
+      notifyListeners();
+    } catch (error) {
+      throw (error);
+    }
   }
 
-  void updateProduct(String id, Product newProduct) {
-    final productIndex = _items.indexWhere((product) => product.id == id);
+  Future<void> addProduct(Product product) async {
+    final url = Uri.parse(
+        'https://baza-c087c-default-rtdb.firebaseio.com/products.json');
+    try {
+      final response = await http.post(
+        url,
+        body: json.encode({
+          'title': product.title,
+          'description': product.description,
+          'imageUrl': product.imageUrl,
+          'price': product.price,
+          'isFavorite': product.isFavorite,
+        }),
+      );
+      final newProduct = Product(
+        title: product.title,
+        description: product.description,
+        price: product.price,
+        imageUrl: product.imageUrl,
+        id: json.decode(response.body)['name'],
+      );
+      _items.add(newProduct);
+      // _items.insert(0, newProduct); // at the start of the list
+      notifyListeners();
+    } catch (error) {
+      print(error);
+      throw error;
+    }
+  }
 
-    if (productIndex >= 0) {
-      _items[productIndex] = newProduct;
+  Future<void> updateProduct(String id, Product newProduct) async {
+    final prodIndex = _items.indexWhere((prod) => prod.id == id);
+    if (prodIndex >= 0) {
+      final url = Uri.parse(
+          'https://baza-c087c-default-rtdb.firebaseio.com/products/$id.json');
+
+      await http.patch(url,
+          body: json.encode({
+            'title': newProduct.title,
+            'description': newProduct.description,
+            'imageUrl': newProduct.imageUrl,
+            'price': newProduct.price
+          }));
+      _items[prodIndex] = newProduct;
       notifyListeners();
     } else {
       print('...');
     }
   }
 
-  void deleteProduct(String id) {
-    _items.removeWhere((element) => element.id == id);
+  Future<void> deleteProduct(String id) async {
+    final url = Uri.parse(
+        'https://baza-c087c-default-rtdb.firebaseio.com/products/$id.json');
+
+    final existingProductIndex =
+        _items.indexWhere((element) => element.id == id);
+    Product? existingProduct = _items[existingProductIndex];
+    _items.removeAt(existingProductIndex);
     notifyListeners();
+
+    final response = await http.delete(url);
+
+    if (response.statusCode >= 400) {
+      _items.insert(existingProductIndex, existingProduct);
+      notifyListeners();
+      throw HttpException('Could not delete product!');
+    }
+    existingProduct = null;
   }
 }
